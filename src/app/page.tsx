@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { generateReportFromText, type GenerateReportFromTextOutput } from '@/ai/flows/generate-report-from-text';
+import { generateReportFromText, type ReportData } from '@/lib/text-processor';
 import { Header } from '@/components/header';
 
 type AppState =
@@ -44,7 +44,7 @@ export default function Home() {
   const [imagePreview, setImagePreview] = useState<string>('');
   const [ocrResult, setOcrResult] = useState<string>('');
   const [editedText, setEditedText] = useState<string>('');
-  const [reportData, setReportData] = useState<GenerateReportFromTextOutput | null>(null);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [appState, setAppState] = useState<AppState>('idle');
   const { toast } = useToast();
@@ -111,7 +111,10 @@ export default function Home() {
     setAppState('generating');
 
     try {
-      const result = await generateReportFromText({ extractedText: editedText });
+      // Simulate processing time
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const result = generateReportFromText(editedText);
       setReportData(result);
       setAppState('report');
     } catch (error) {
@@ -119,7 +122,7 @@ export default function Home() {
       toast({
         variant: 'destructive',
         title: 'Error al generar el informe',
-        description: 'La IA no pudo procesar la solicitud. Inténtalo de nuevo.',
+        description: 'No se pudo procesar el texto. Inténtalo de nuevo.',
       });
       setAppState('edit');
     }
@@ -133,7 +136,7 @@ export default function Home() {
     window.open(doc.output('bloburl'), '_blank');
   };
   
-  const generatePdf = (data: GenerateReportFromTextOutput): jsPDFWithAutoTable => {
+  const generatePdf = (data: ReportData): jsPDFWithAutoTable => {
     const doc = new jsPDF() as jsPDFWithAutoTable;
     const pageHeight = doc.internal.pageSize.height;
     let y = 15;
@@ -342,8 +345,8 @@ export default function Home() {
           <Card className="w-full max-w-2xl p-8 text-center">
             <CardContent className="flex flex-col items-center gap-4">
               <Wand2 className="w-12 h-12 animate-pulse text-primary" />
-              <p className="text-lg font-medium text-foreground">Generando informe con IA...</p>
-              <p className="text-sm text-muted-foreground">Esto puede tardar unos segundos.</p>
+              <p className="text-lg font-medium text-foreground">Generando informe...</p>
+              <p className="text-sm text-muted-foreground">Procesando el texto extraído.</p>
             </CardContent>
           </Card>
         );
