@@ -3,6 +3,8 @@
 import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import Tesseract from 'tesseract.js';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import {
   UploadCloud,
   FileText,
@@ -122,17 +124,71 @@ export default function Home() {
     document.body.classList.remove('printing');
   };
 
-  const handleDownload = () => {
-    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'TextoScan-AI-Informe.txt';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleDownloadPdf = async () => {
+    const reportElement = document.getElementById('printable-report');
+    if (!reportElement) return;
+
+    // Temporarily make the element visible for capture if it's styled for printing
+    const wasPrinting = document.body.classList.contains('printing');
+    if (!wasPrinting) {
+      reportElement.style.visibility = 'visible';
+      reportElement.style.position = 'absolute';
+      reportElement.style.left = '-9999px';
+    }
+
+    try {
+        const canvas = await html2canvas(reportElement, {
+            scale: 2, // Higher scale for better quality
+            useCORS: true,
+            logging: false, 
+            width: reportElement.scrollWidth,
+            height: reportElement.scrollHeight,
+            windowWidth: document.documentElement.offsetWidth,
+            windowHeight: document.documentElement.offsetHeight,
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: 'a4',
+        });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        let heightLeft = pdfHeight;
+        let position = 0;
+        const pageHeight = pdf.internal.pageSize.getHeight();
+
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+            position = heightLeft - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+            heightLeft -= pageHeight;
+        }
+
+        pdf.save('TextoScan-AI-Informe.pdf');
+
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Error al generar PDF',
+            description: 'No se pudo generar el archivo PDF.',
+        });
+    } finally {
+      // Clean up styles
+      if (!wasPrinting) {
+        reportElement.style.visibility = '';
+        reportElement.style.position = '';
+        reportElement.style.left = '';
+      }
+    }
   };
+
 
   const handleRestart = () => {
     setImageFile(null);
@@ -250,9 +306,9 @@ export default function Home() {
                 <Printer className="mr-2 h-5 w-5" />
                 Imprimir
               </Button>
-              <Button size="lg" onClick={handleDownload} variant="secondary">
+              <Button size="lg" onClick={handleDownloadPdf} variant="secondary">
                 <Download className="mr-2 h-5 w-5" />
-                Descargar
+                Descargar PDF
               </Button>
               <Button size="lg" onClick={handleRestart} variant="outline">
                 <RotateCcw className="mr-2 h-5 w-5" />
