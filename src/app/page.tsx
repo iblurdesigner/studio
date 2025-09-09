@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import Tesseract from 'tesseract.js';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import 'jspdf-autotable';
 import {
   UploadCloud,
   FileText,
@@ -17,11 +17,13 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { generateReportFromText } from '@/ai/flows/generate-report-from-text';
+import { generateReportFromText, type GenerateReportFromTextOutput } from '@/ai/flows/generate-report-from-text';
 import { Header } from '@/components/header';
 
 type AppState =
@@ -32,12 +34,17 @@ type AppState =
   | 'generating'
   | 'report';
 
+// Extend jsPDF with autoTable
+interface jsPDFWithAutoTable extends jsPDF {
+  autoTable: (options: any) => jsPDF;
+}
+
 export default function Home() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   const [ocrResult, setOcrResult] = useState<string>('');
   const [editedText, setEditedText] = useState<string>('');
-  const [report, setReport] = useState<string>('');
+  const [reportData, setReportData] = useState<GenerateReportFromTextOutput | null>(null);
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [appState, setAppState] = useState<AppState>('idle');
   const { toast } = useToast();
@@ -105,7 +112,7 @@ export default function Home() {
 
     try {
       const result = await generateReportFromText({ extractedText: editedText });
-      setReport(result.report);
+      setReportData(result);
       setAppState('report');
     } catch (error) {
       console.error(error);
@@ -117,85 +124,127 @@ export default function Home() {
       setAppState('edit');
     }
   };
-  
+
   const handlePrint = () => {
-    document.body.classList.add('printing');
-    window.print();
-    document.body.classList.remove('printing');
+    // We'll generate a PDF and open it in a new tab for printing
+    if (!reportData) return;
+    const doc = generatePdf(reportData);
+    doc.autoPrint();
+    window.open(doc.output('bloburl'), '_blank');
+  };
+  
+  const generatePdf = (data: GenerateReportFromTextOutput): jsPDFWithAutoTable => {
+    const doc = new jsPDF() as jsPDFWithAutoTable;
+    const pageHeight = doc.internal.pageSize.height;
+    let y = 15;
+
+    // Title
+    doc.setFontSize(18);
+    doc.text(data.titulo, 105, y, { align: 'center' });
+    y += 8;
+    doc.text(`Nº: ${data.numeroSecuencia}`, 105, y, { align: 'center' });
+    y += 10;
+    
+    // Issuer
+    doc.setFontSize(12);
+    doc.text('Emisor:', 14, y);
+    doc.setFontSize(10);
+    doc.text(`${data.emisor.nombre}`, 14, y += 6);
+    doc.text(`RUC: ${data.emisor.ruc}`, 14, y += 6);
+    doc.text(`DIR.: ${data.emisor.direccion}`, 14, y += 6);
+    doc.text(`TELF: ${data.emisor.telefono}`, 14, y += 6);
+
+    // Receiver
+    y += 10;
+    doc.setFontSize(12);
+    doc.text('Receptor:', 14, y);
+    doc.setFontSize(10);
+    doc.text(`Recibí de: ${data.receptor.nombre}`, 14, y += 6);
+    doc.text(`Telf.: ${data.receptor.telefono}`, 14, y += 6);
+    doc.text(`Dirección: ${data.receptor.direccion}`, 14, y += 6);
+    doc.text(`Identificación: ${data.receptor.identificacion}`, 14, y += 6);
+    doc.text(`Fecha de cobro: ${data.receptor.fechaCobro}`, 14, y += 6);
+
+    // Table
+    y += 10;
+    doc.autoTable({
+      startY: y,
+      head: [['Unidad', 'Detalle', 'Valor', 'Descuento', 'Pago']],
+      body: data.items.map(item => [
+        item.unidad,
+        item.detalle,
+        `$${item.valor.toFixed(2)}`,
+        `$${item.descuento.toFixed(2)}`,
+        `$${item.pago.toFixed(2)}`
+      ]),
+      theme: 'striped',
+      headStyles: { fillColor: [66, 133, 244] }, // Primary color
+    });
+    
+    y = doc.autoTable.previous.finalY + 15;
+    
+    // Footer
+    const rightColX = 140;
+    
+    doc.setFontSize(10);
+    doc.text('Forma de pago:', 14, y);
+    doc.text(data.pie.formaPago, 14, y += 6);
+    doc.text(`Documento/Comprobante: ${data.pie.documentoComprobante}`, 14, y += 6);
+    
+    y += 8;
+    doc.setFontSize(10).setFont(undefined, 'bold');
+    doc.text('INFORMACION RELACIONADA:', 14, y);
+    doc.setFont(undefined, 'normal');
+    doc.text(data.pie.informacionRelacionada, 14, y += 6);
+    
+    let footerY = doc.autoTable.previous.finalY + 15;
+    
+    doc.text(`SUBTOTAL:`, rightColX, footerY);
+    doc.text(`$${data.totales.subtotal.toFixed(2)}`, 200, footerY, { align: 'right' });
+    footerY += 7;
+    
+    doc.text(`DESCUENTOS:`, rightColX, footerY);
+    doc.text(`$${data.totales.descuentos.toFixed(2)}`, 200, footerY, { align: 'right' });
+    footerY += 7;
+    
+    doc.setFont(undefined, 'bold');
+    doc.text(`TOTAL:`, rightColX, footerY);
+    doc.text(`$${data.totales.total.toFixed(2)}`, 200, footerY, { align: 'right' });
+
+    return doc;
+  }
+
+  const handleDownloadPdf = () => {
+    if (!reportData) return;
+    const doc = generatePdf(reportData);
+    doc.save('TextoScan-AI-Comprobante.pdf');
   };
 
-  const handleDownloadPdf = async () => {
-    const reportElement = document.getElementById('printable-report');
-    if (!reportElement) return;
+  const handleReportDataChange = (section: string, field: string, value: string, index?: number) => {
+    if (!reportData) return;
 
-    // Temporarily make the element visible for capture if it's styled for printing
-    const wasPrinting = document.body.classList.contains('printing');
-    if (!wasPrinting) {
-      reportElement.style.visibility = 'visible';
-      reportElement.style.position = 'absolute';
-      reportElement.style.left = '-9999px';
-    }
-
-    try {
-        const canvas = await html2canvas(reportElement, {
-            scale: 2, // Higher scale for better quality
-            useCORS: true,
-            logging: false, 
-            width: reportElement.scrollWidth,
-            height: reportElement.scrollHeight,
-            windowWidth: document.documentElement.offsetWidth,
-            windowHeight: document.documentElement.offsetHeight,
-        });
-        
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
-            orientation: 'p',
-            unit: 'mm',
-            format: 'a4',
-        });
-
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        let heightLeft = pdfHeight;
-        let position = 0;
-        const pageHeight = pdf.internal.pageSize.getHeight();
-
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-        heightLeft -= pageHeight;
-
-        while (heightLeft > 0) {
-            position = heightLeft - pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-            heightLeft -= pageHeight;
-        }
-
-        pdf.save('TextoScan-AI-Informe.pdf');
-
-    } catch (error) {
-        console.error('Error generating PDF:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Error al generar PDF',
-            description: 'No se pudo generar el archivo PDF.',
-        });
-    } finally {
-      // Clean up styles
-      if (!wasPrinting) {
-        reportElement.style.visibility = '';
-        reportElement.style.position = '';
-        reportElement.style.left = '';
+    setReportData(prevData => {
+      if (!prevData) return null;
+      // Deep copy to avoid direct state mutation
+      const newData = JSON.parse(JSON.stringify(prevData));
+      
+      if (section === 'items' && index !== undefined) {
+        newData[section][index][field] = value;
+      } else if (section === 'totales' || section === 'emisor' || section === 'receptor' || section === 'pie') {
+        newData[section][field] = value;
+      } else {
+        newData[field] = value;
       }
-    }
+      return newData;
+    });
   };
-
 
   const handleRestart = () => {
     setImageFile(null);
     setImagePreview('');
     setOcrResult('');
     setEditedText('');
-    setReport('');
+    setReportData(null);
     setOcrProgress(0);
     setAppState('idle');
   };
@@ -299,6 +348,7 @@ export default function Home() {
           </Card>
         );
       case 'report':
+        if (!reportData) return null;
         return (
           <div className="w-full max-w-4xl space-y-6">
             <div className="flex flex-wrap gap-4 justify-center">
@@ -315,13 +365,88 @@ export default function Home() {
                 Empezar de Nuevo
               </Button>
             </div>
-            <Card className="w-full">
-              <CardHeader>
-                <CardTitle>Informe Generado</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div id="printable-report" className="space-y-4 text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: report.replace(/\n/g, '<br />') }} />
-              </CardContent>
+            <Card className="w-full p-6">
+              <div id="printable-report" className="space-y-6">
+                {/* Header */}
+                <div className="text-center space-y-1">
+                  <Input 
+                    value={reportData.titulo} 
+                    onChange={(e) => handleReportDataChange('titulo', '', e.target.value)}
+                    className="text-2xl font-bold text-center border-none focus-visible:ring-0 shadow-none p-0 h-auto"
+                  />
+                  <Input 
+                    value={`Nº: ${reportData.numeroSecuencia}`}
+                    onChange={(e) => handleReportDataChange('numeroSecuencia', '', e.target.value.replace('Nº: ', ''))}
+                    className="text-lg text-center border-none focus-visible:ring-0 shadow-none p-0 h-auto"
+                  />
+                </div>
+
+                {/* Emitter & Receiver */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <h3 className="font-semibold">Emisor</h3>
+                    <div className="grid grid-cols-[100px_1fr] items-center gap-2">
+                      <Label>Nombre:</Label> <Input value={reportData.emisor.nombre} onChange={(e) => handleReportDataChange('emisor', 'nombre', e.target.value)} />
+                      <Label>RUC:</Label> <Input value={reportData.emisor.ruc} onChange={(e) => handleReportDataChange('emisor', 'ruc', e.target.value)} />
+                      <Label>Dirección:</Label> <Input value={reportData.emisor.direccion} onChange={(e) => handleReportDataChange('emisor', 'direccion', e.target.value)} />
+                      <Label>Teléfono:</Label> <Input value={reportData.emisor.telefono} onChange={(e) => handleReportDataChange('emisor', 'telefono', e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-semibold">Receptor</h3>
+                     <div className="grid grid-cols-[100px_1fr] items-center gap-2">
+                      <Label>Recibí de:</Label> <Input value={reportData.receptor.nombre} onChange={(e) => handleReportDataChange('receptor', 'nombre', e.target.value)} />
+                      <Label>Teléfono:</Label> <Input value={reportData.receptor.telefono} onChange={(e) => handleReportDataChange('receptor', 'telefono', e.target.value)} />
+                      <Label>Dirección:</Label> <Input value={reportData.receptor.direccion} onChange={(e) => handleReportDataChange('receptor', 'direccion', e.target.value)} />
+                      <Label>Identif.:</Label> <Input value={reportData.receptor.identificacion} onChange={(e) => handleReportDataChange('receptor', 'identificacion', e.target.value)} />
+                      <Label>Fecha Cobro:</Label> <Input type="date" value={reportData.receptor.fechaCobro} onChange={(e) => handleReportDataChange('receptor', 'fechaCobro', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="p-2">Unidad</th>
+                        <th className="p-2">Detalle</th>
+                        <th className="p-2 text-right">Valor</th>
+                        <th className="p-2 text-right">Descuento</th>
+                        <th className="p-2 text-right">Pago</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.items.map((item, index) => (
+                        <tr key={index} className="border-b">
+                          <td className="p-2"><Input value={item.unidad} onChange={(e) => handleReportDataChange('items', 'unidad', e.target.value, index)} className="border-none"/></td>
+                          <td className="p-2"><Input value={item.detalle} onChange={(e) => handleReportDataChange('items', 'detalle', e.target.value, index)} className="border-none"/></td>
+                          <td className="p-2"><Input value={item.valor} onChange={(e) => handleReportDataChange('items', 'valor', e.target.value, index)} className="text-right border-none"/></td>
+                          <td className="p-2"><Input value={item.descuento} onChange={(e) => handleReportDataChange('items', 'descuento', e.target.value, index)} className="text-right border-none"/></td>
+                          <td className="p-2"><Input value={item.pago} onChange={(e) => handleReportDataChange('items', 'pago', e.target.value, index)} className="text-right border-none"/></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer */}
+                <div className="flex justify-between items-start pt-4">
+                    <div className="text-sm space-y-2">
+                      <p className="font-semibold">Forma de pago:</p>
+                      <Input value={reportData.pie.formaPago} onChange={(e) => handleReportDataChange('pie', 'formaPago', e.target.value)} />
+                      <Input value={`Documento/Comprobante: ${reportData.pie.documentoComprobante}`} onChange={(e) => handleReportDataChange('pie', 'documentoComprobante', e.target.value.replace('Documento/Comprobante: ', ''))} />
+                      <p className="font-semibold pt-2">INFORMACION RELACIONADA:</p>
+                      <Input value={reportData.pie.informacionRelacionada} onChange={(e) => handleReportDataChange('pie', 'informacionRelacionada', e.target.value)} />
+                    </div>
+                    <div className="text-sm space-y-2 w-1/3">
+                        <div className="flex justify-between"><span>SUBTOTAL:</span> <span>${reportData.totales.subtotal.toFixed(2)}</span></div>
+                        <div className="flex justify-between"><span>DESCUENTOS:</span> <span>${reportData.totales.descuentos.toFixed(2)}</span></div>
+                        <div className="flex justify-between font-bold text-base"><span>TOTAL:</span> <span>${reportData.totales.total.toFixed(2)}</span></div>
+                    </div>
+                </div>
+
+              </div>
             </Card>
           </div>
         );

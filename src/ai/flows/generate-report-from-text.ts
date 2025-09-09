@@ -21,7 +21,42 @@ export type GenerateReportFromTextInput = z.infer<
 >;
 
 const GenerateReportFromTextOutputSchema = z.object({
-  report: z.string().describe('The formatted report generated from the text.'),
+  titulo: z.string().default('Comprobante de pago'),
+  numeroSecuencia: z.string(),
+  emisor: z.object({
+    nombre: z.string().default('OLGER RODRIGO FLORES FLORES'),
+    ruc: z.string().default('1703684785001'),
+    direccion: z.string().default('Real Audicencia'),
+    telefono: z.string().default('0983502111'),
+  }),
+  receptor: z.object({
+    nombre: z.string().default('AMADA HORTENCIA CISNEROS BURBANO'),
+    telefono: z.string().default('099 480 6251'),
+    direccion: z.string().default('Calle Real Audiencia N-63-141 y Los Cedros'),
+    identificacion: z.string().default('1707158364'),
+    fechaCobro: z.string().describe('La fecha actual en formato YYYY-MM-DD'),
+  }),
+  items: z.array(
+    z.object({
+      unidad: z.string().default('Otro ingreso'),
+      detalle: z.string().describe("Incluir 'Arriendo de casa, mes de' y el mes actual y año 2025"),
+      valor: z.number().default(350.0),
+      descuento: z.number().default(0.0),
+      pago: z.number().default(350.0),
+    })
+  ),
+  pie: z.object({
+    formaPago: z.string().default('Forma de pago en dólares, transferencia.'),
+    documentoComprobante: z.string().describe('El número de comprobante extraído del texto OCR.'),
+    informacionRelacionada: z
+      .string()
+      .default('Banco Internacional Cta. Ahorros: 608032998.'),
+  }),
+  totales: z.object({
+    subtotal: z.number().default(350.0),
+    descuentos: z.number().default(0.0),
+    total: z.number().default(350.0),
+  }),
 });
 export type GenerateReportFromTextOutput = z.infer<
   typeof GenerateReportFromTextOutputSchema
@@ -37,12 +72,16 @@ const prompt = ai.definePrompt({
   name: 'generateReportFromTextPrompt',
   input: {schema: GenerateReportFromTextInputSchema},
   output: {schema: GenerateReportFromTextOutputSchema},
-  prompt: `You are an AI that generates a formatted report from the extracted text.
-
-  Extracted Text: {{{extractedText}}}
-
-  Please generate a well-formatted and informative report based on the extracted text.
-  The report should be easy to read and understand.
+  prompt: `
+    You are an AI assistant that generates a payment receipt based on extracted text.
+    The output must be a JSON object matching the provided schema.
+    The user wants a receipt with a specific structure. Please populate the JSON fields exactly as requested in the schema descriptions.
+    - Generate a unique sequence number.
+    - For the item detail, use the current month and the year 2025.
+    - Use the provided OCR text to fill in the 'documentoComprobante' field.
+    - Set the 'fechaCobro' to today's date.
+    
+    Extracted OCR Text: {{{extractedText}}}
   `,
 });
 
