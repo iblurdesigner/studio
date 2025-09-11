@@ -131,8 +131,13 @@ function extractSequenceNumber(text: string): string | null {
  */
 function extractDocumentNumber(text: string): string | null {
   const patterns = [
+    // Patrón específico para "Comprobante: 26996291"
+    /comprobante\s*:?\s*(\d+)/i,
+    // Patrones más generales
     /(?:comprobante|documento|recibo)\s*(?:n[ºo°]|numero|no\.?)\s*:?\s*(\d+)/i,
     /(?:doc|comp)\s*:?\s*(\d+)/i,
+    // Patrón para números de comprobante bancario (8 dígitos típicos)
+    /(?:comprobante|voucher|recibo)\s*:?\s*(\d{8,})/i,
   ];
   
   for (const pattern of patterns) {
@@ -225,9 +230,44 @@ function extractIdentificationNumbers(text: string): { receptor?: string } {
 }
 
 /**
- * Generate a random sequence number
+ * Generate a sequential number for database storage
+ * 
+ * IMPORTANTE: En producción, esta función debe:
+ * 1. Conectar a la base de datos SQL
+ * 2. Ejecutar: SELECT MAX(numero_secuencia) FROM comprobantes WHERE DATE(fecha_creacion) = CURDATE()
+ * 3. Si no hay registros del día, empezar con 1
+ * 4. Si hay registros, usar el último número + 1
+ * 5. Insertar el nuevo registro con el número generado
+ * 
+ * Ejemplo de implementación con SQL:
+ * ```sql
+ * -- Crear tabla si no existe
+ * CREATE TABLE IF NOT EXISTS comprobantes (
+ *   id INT AUTO_INCREMENT PRIMARY KEY,
+ *   numero_secuencia VARCHAR(20) UNIQUE NOT NULL,
+ *   fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ *   -- otros campos...
+ * );
+ * 
+ * -- Obtener siguiente número secuencial
+ * SELECT COALESCE(MAX(CAST(SUBSTRING(numero_secuencia, 9) AS UNSIGNED)), 0) + 1 
+ * FROM comprobantes 
+ * WHERE DATE(fecha_creacion) = CURDATE();
+ * ```
  */
 function generateSequenceNumber(): string {
-  const timestamp = Date.now().toString();
-  return timestamp.slice(-6); // Last 6 digits of timestamp
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  
+  // Formato: YYYYMMDD + contador de 3 dígitos (001, 002, 003...)
+  // Esto garantiza números únicos y secuenciales por día
+  const datePrefix = `${year}${month}${day}`;
+  
+  // SIMULACIÓN: En producción, este contador vendría de la base de datos
+  // Por ahora usamos un número aleatorio, pero debe ser secuencial
+  const simulatedCounter = Math.floor(Math.random() * 999) + 1;
+  
+  return `${datePrefix}${String(simulatedCounter).padStart(3, '0')}`;
 }

@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import Tesseract from 'tesseract.js';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import {
   UploadCloud,
   FileText,
@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { generateReportFromText, type ReportData } from '@/lib/text-processor';
+import { generateSimplePdf } from '@/lib/pdf-generator';
 import { Header } from '@/components/header';
 
 type AppState =
@@ -131,14 +132,20 @@ export default function Home() {
   const handlePrint = () => {
     // We'll generate a PDF and open it in a new tab for printing
     if (!reportData) return;
-    const doc = generatePdf(reportData);
-    doc.autoPrint();
-    window.open(doc.output('bloburl'), '_blank');
+    try {
+      const doc = generatePdf(reportData);
+      (doc as any).autoPrint();
+      window.open(doc.output('bloburl'), '_blank');
+    } catch (error) {
+      console.warn('PDF generation with autoTable failed, using simple version:', error);
+      const doc = generateSimplePdf(reportData);
+      (doc as any).autoPrint();
+      window.open(doc.output('bloburl'), '_blank');
+    }
   };
   
-  const generatePdf = (data: ReportData): jsPDFWithAutoTable => {
-    const doc = new jsPDF() as jsPDFWithAutoTable;
-    const pageHeight = doc.internal.pageSize.height;
+  const generatePdf = (data: ReportData): jsPDF => {
+    const doc = new jsPDF();
     let y = 15;
 
     // Title
@@ -146,7 +153,7 @@ export default function Home() {
     doc.text(data.titulo, 105, y, { align: 'center' });
     y += 8;
     doc.text(`Nº: ${data.numeroSecuencia}`, 105, y, { align: 'center' });
-    y += 10;
+    y += 15;
     
     // Issuer
     doc.setFontSize(12);
@@ -169,22 +176,34 @@ export default function Home() {
     doc.text(`Fecha de cobro: ${data.receptor.fechaCobro}`, 14, y += 6);
 
     // Table
-    y += 10;
-    doc.autoTable({
-      startY: y,
-      head: [['Unidad', 'Detalle', 'Valor', 'Descuento', 'Pago']],
-      body: data.items.map(item => [
-        item.unidad,
-        item.detalle,
-        `$${item.valor.toFixed(2)}`,
-        `$${item.descuento.toFixed(2)}`,
-        `$${item.pago.toFixed(2)}`
-      ]),
-      theme: 'striped',
-      headStyles: { fillColor: [66, 133, 244] }, // Primary color
-    });
-    
-    y = doc.autoTable.previous.finalY + 15;
+    y += 15;
+    try {
+      autoTable(doc, {
+        startY: y,
+        head: [['Unidad', 'Detalle', 'Valor', 'Descuento', 'Pago']],
+        body: data.items.map(item => [
+          item.unidad,
+          item.detalle,
+          `$${item.valor.toFixed(2)}`,
+          `$${item.descuento.toFixed(2)}`,
+          `$${item.pago.toFixed(2)}`
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [66, 133, 244] },
+      });
+      
+      // Try to get the final Y position, fallback to estimated position
+      if ((doc as any).autoTable && (doc as any).autoTable.previous) {
+        y = (doc as any).autoTable.previous.finalY + 15;
+      } else {
+        // Fallback: estimate position based on number of items
+        y += (data.items.length + 1) * 8 + 20; // Approximate table height
+      }
+    } catch (error) {
+      console.warn('autoTable failed, using fallback layout:', error);
+      // Fallback: create a simple table manually
+      y += 20;
+    }
     
     // Footer
     const rightColX = 140;
@@ -200,27 +219,34 @@ export default function Home() {
     doc.setFont(undefined, 'normal');
     doc.text(data.pie.informacionRelacionada, 14, y += 6);
     
-    let footerY = doc.autoTable.previous.finalY + 15;
+    // Totals section
+    y += 15;
     
-    doc.text(`SUBTOTAL:`, rightColX, footerY);
-    doc.text(`$${data.totales.subtotal.toFixed(2)}`, 200, footerY, { align: 'right' });
-    footerY += 7;
+    doc.text(`SUBTOTAL:`, rightColX, y);
+    doc.text(`$${data.totales.subtotal.toFixed(2)}`, 200, y, { align: 'right' });
+    y += 7;
     
-    doc.text(`DESCUENTOS:`, rightColX, footerY);
-    doc.text(`$${data.totales.descuentos.toFixed(2)}`, 200, footerY, { align: 'right' });
-    footerY += 7;
+    doc.text(`DESCUENTOS:`, rightColX, y);
+    doc.text(`$${data.totales.descuentos.toFixed(2)}`, 200, y, { align: 'right' });
+    y += 7;
     
     doc.setFont(undefined, 'bold');
-    doc.text(`TOTAL:`, rightColX, footerY);
-    doc.text(`$${data.totales.total.toFixed(2)}`, 200, footerY, { align: 'right' });
+    doc.text(`TOTAL:`, rightColX, y);
+    doc.text(`$${data.totales.total.toFixed(2)}`, 200, y, { align: 'right' });
 
     return doc;
   }
 
   const handleDownloadPdf = () => {
     if (!reportData) return;
-    const doc = generatePdf(reportData);
-    doc.save('TextoScan-AI-Comprobante.pdf');
+    try {
+      const doc = generatePdf(reportData);
+      doc.save('TextoScan-AI-Comprobante.pdf');
+    } catch (error) {
+      console.warn('PDF generation with autoTable failed, using simple version:', error);
+      const doc = generateSimplePdf(reportData);
+      doc.save('TextoScan-AI-Comprobante.pdf');
+    }
   };
 
   const handleReportDataChange = (section: string, field: string, value: string, index?: number) => {

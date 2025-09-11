@@ -7,8 +7,9 @@ export function Header() {
         <div className="p-2 bg-primary rounded-lg">
           <ScanText className="h-8 w-8 text-primary-foreground" />
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          TextoScan AI
+        <h1 className="text-3xl font-bold tracking-tight text-foreground flex flex-col align-items-center">
+          TextScan FM
+          <span className="text-sm text-gray-400">Comprobantes de Arriendo</span>
         </h1>
       </div>
     </header>

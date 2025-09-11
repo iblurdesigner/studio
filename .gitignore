@@ -43,3 +43,8 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# contextos de desarrollo
+PDF_FIX_NOTES.md
+WARP.md
+database-schema.sql

@@ -3,8 +3,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'TextoScan AI',
-  description: 'Extrae texto de imágenes y genera informes con IA.',
+  title: 'TextScan Comprobante Arriendo',
+  description: 'Extrae texto de imágenes y genera comprobantes de arriendo.',
 };
 
 export default function RootLayout({
