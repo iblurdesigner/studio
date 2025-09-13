@@ -14,6 +14,8 @@ import {
   Download,
   RotateCcw,
   X,
+  Save,
+  Database,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -48,6 +50,8 @@ export default function Home() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [appState, setAppState] = useState<AppState>('idle');
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [savedComprobante, setSavedComprobante] = useState<{id: number, numeroSecuencia: string} | null>(null);
   const { toast } = useToast();
 
   const handleFileChange = (files: FileList | null) => {
@@ -249,6 +253,51 @@ export default function Home() {
     }
   };
 
+  const handleSaveToDatabase = async () => {
+    if (!reportData) return;
+    
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/comprobantes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...reportData,
+          textoOcrOriginal: editedText,
+          imagenPath: imagePreview,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al guardar el comprobante');
+      }
+
+      setSavedComprobante({
+        id: result.data.id,
+        numeroSecuencia: result.data.numeroSecuencia
+      });
+
+      toast({
+        title: '¡Comprobante guardado!',
+        description: `Se guardó exitosamente con el número: ${result.data.numeroSecuencia}`,
+      });
+
+    } catch (error) {
+      console.error('Error saving to database:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error al guardar',
+        description: error instanceof Error ? error.message : 'No se pudo guardar el comprobante en la base de datos.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleReportDataChange = (section: string, field: string, value: string, index?: number) => {
     if (!reportData) return;
 
@@ -276,6 +325,8 @@ export default function Home() {
     setReportData(null);
     setOcrProgress(0);
     setAppState('idle');
+    setIsSaving(false);
+    setSavedComprobante(null);
   };
 
   const renderContent = () => {
@@ -381,6 +432,21 @@ export default function Home() {
         return (
           <div className="w-full max-w-4xl space-y-6">
             <div className="flex flex-wrap gap-4 justify-center">
+              <Button 
+                size="lg" 
+                onClick={handleSaveToDatabase} 
+                disabled={isSaving || !!savedComprobante}
+                variant={savedComprobante ? "secondary" : "default"}
+              >
+                {isSaving ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                ) : savedComprobante ? (
+                  <Database className="mr-2 h-5 w-5" />
+                ) : (
+                  <Save className="mr-2 h-5 w-5" />
+                )}
+                {isSaving ? 'Guardando...' : savedComprobante ? `Guardado: ${savedComprobante.numeroSecuencia}` : 'Guardar en BD'}
+              </Button>
               <Button size="lg" onClick={handlePrint}>
                 <Printer className="mr-2 h-5 w-5" />
                 Imprimir
