@@ -530,7 +530,7 @@ export default function Home() {
                     <div className="text-sm space-y-2">
                       <p className="font-semibold">Forma de pago:</p>
                       <Input value={reportData.pie.formaPago} onChange={(e) => handleReportDataChange('pie', 'formaPago', e.target.value)} />
-                      <Input value={`Documento/Comprobante: ${reportData.pie.documentoComprobante}`} onChange={(e) => handleReportDataChange('pie', 'documentoComprobante', e.target.value.replace('Documento/Comprobante: ', ''))} />
+                      <Input value={`Documento/Comprobante: ${reportData.pie.documentoComprobante}`} onChange={(e) => handleReportDataChange('pie', 'documentoComprobante', e.target.value.replace('Documento/Comprobante: ', ''))} className="w-[400px]" />
                       <p className="font-semibold pt-2">INFORMACION RELACIONADA:</p>
                       <Input value={reportData.pie.informacionRelacionada} onChange={(e) => handleReportDataChange('pie', 'informacionRelacionada', e.target.value)} />
                     </div>
