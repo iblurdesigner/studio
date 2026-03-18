@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { 
   FileText, 
   Search, 
@@ -31,11 +33,26 @@ interface ComprobanteItem {
 
 interface ComprobanteData {
   titulo: string;
-  emisor: { nombre: string; ruc: string };
-  receptor: { nombre: string; telefono: string; identificacion: string };
+  emisor: { 
+    nombre: string; 
+    ruc: string;
+    direccion?: string;
+    telefono?: string;
+  };
+  receptor: { 
+    nombre: string; 
+    telefono: string; 
+    direccion?: string;
+    identificacion: string;
+    fechaCobro?: string;
+  };
   items: ComprobanteItem[];
   totales: { subtotal: number; descuentos: number; total: number };
-  receptorFechaCobro?: string;
+  pie?: {
+    formaPago: string;
+    documentoComprobante: string;
+    informacionRelacionada: string;
+  };
 }
 
 interface SavedComprobante {
@@ -116,6 +133,91 @@ export default function ComprobantesPage() {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
+  };
+
+  // Generate and download PDF for a comprobante
+  const handleDownloadPdf = (comp: SavedComprobante) => {
+    const data = comp.comprobanteData;
+    const doc = new jsPDF();
+    let y = 15;
+
+    // Title
+    doc.setFontSize(18);
+    doc.text(data.titulo, 105, y, { align: 'center' });
+    y += 8;
+    doc.text(`Nº: ${comp.numeroSecuencia}`, 105, y, { align: 'center' });
+    y += 15;
+    
+    // Issuer
+    doc.setFontSize(12);
+    doc.text('Emisor:', 14, y);
+    doc.setFontSize(10);
+    doc.text(`${data.emisor.nombre}`, 14, y += 6);
+    doc.text(`RUC: ${data.emisor.ruc}`, 14, y += 6);
+
+    // Receiver
+    y += 10;
+    doc.setFontSize(12);
+    doc.text('Receptor:', 14, y);
+    doc.setFontSize(10);
+    doc.text(`Recibí de: ${data.receptor.nombre}`, 14, y += 6);
+    doc.text(`Telf.: ${data.receptor.telefono}`, 14, y += 6);
+    doc.text(`Identificación: ${data.receptor.identificacion}`, 14, y += 6);
+    doc.text(`Fecha de cobro: ${data.receptor.fechaCobro}`, 14, y += 6);
+
+    // Table
+    y += 15;
+    try {
+      autoTable(doc, {
+        startY: y,
+        head: [['Unidad', 'Detalle', 'Valor', 'Descuento', 'Pago']],
+        body: data.items.map(item => [
+          item.unidad,
+          item.detalle,
+          `$${item.valor.toFixed(2)}`,
+          `$${item.descuento.toFixed(2)}`,
+          `$${item.pago.toFixed(2)}`
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [66, 133, 244] },
+      });
+      
+      if ((doc as any).autoTable && (doc as any).autoTable.previous) {
+        y = (doc as any).autoTable.previous.finalY + 15;
+      } else {
+        y += (data.items.length + 1) * 8 + 20;
+      }
+    } catch (error) {
+      y += 20;
+    }
+    
+    // Footer
+    const rightColX = 140;
+    doc.setFontSize(10);
+    doc.text('Forma de pago:', 14, y);
+    doc.text(data.pie?.formaPago || 'Transferencia', 14, y += 6);
+    doc.text(`Documento/Comprobante: ${data.pie?.documentoComprobante || comp.numeroSecuencia}`, 14, y += 6);
+    
+    y += 8;
+    doc.setFontSize(10).setFont(undefined, 'bold');
+    doc.text('INFORMACION RELACIONADA:', 14, y);
+    doc.setFont(undefined, 'normal');
+    doc.text(data.pie?.informacionRelacionada || 'Banco Internacional', 14, y += 6);
+    
+    // Totals
+    y += 15;
+    doc.text(`SUBTOTAL:`, rightColX, y);
+    doc.text(`$${data.totales.subtotal.toFixed(2)}`, 200, y, { align: 'right' });
+    y += 7;
+    doc.text(`DESCUENTOS:`, rightColX, y);
+    doc.text(`$${data.totales.descuentos.toFixed(2)}`, 200, y, { align: 'right' });
+    y += 7;
+    doc.setFont(undefined, 'bold');
+    doc.text(`TOTAL:`, rightColX, y);
+    doc.text(`$${data.totales.total.toFixed(2)}`, 200, y, { align: 'right' });
+
+    // Save
+    doc.save(`Comprobante-${comp.numeroSecuencia}.pdf`);
   };
 
   // Filter comprobantes based on search term
@@ -288,6 +390,19 @@ export default function ComprobantesPage() {
                         <span>Total:</span>
                         <span className="text-primary">{formatCurrency(comp.comprobanteData.totales.total)}</span>
                       </div>
+                    </div>
+                    
+                    {/* Actions */}
+                    <div className="border-t pt-3 mt-3">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full"
+                        onClick={() => handleDownloadPdf(comp)}
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Descargar PDF
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
