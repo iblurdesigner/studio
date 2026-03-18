@@ -1,0 +1,36 @@
+{"location":"page.tsx:256","message":"handleSaveToDatabase called","data":{"hasReportData":true},"timestamp":1765683556216,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}
+{"location":"page.tsx:261","message":"Sending fetch request","data":{"url":"/api/comprobantes","method":"POST"},"timestamp":1765683556216,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}
+{"location":"route.ts:8","message":"POST /api/comprobantes called","data":{},"timestamp":1765683557268,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"route.ts:11","message":"Request body parsed","data":{"hasTitulo":true,"hasEmisor":true,"hasReceptor":true,"hasTotales":true},"timestamp":1765683557271,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"route.ts:21","message":"Testing connection","data":{},"timestamp":1765683557272,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"database.ts:330","message":"testConnection called","data":{"dbHost":"localhost","dbUser":"root","hasPassword":true,"dbName":"textscan_comprob_db"},"timestamp":1765683557273,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"database.ts:345","message":"testConnection failed","data":{"error":"Access denied for user 'root'@'localhost' (using password: YES)","isAccessDenied":true,"willRecreatePool":true},"timestamp":1765683557297,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"database.ts:351","message":"Access denied, trying default password","data":{},"timestamp":1765683557334,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"database.ts:28","message":"Switching to default password","data":{"hadEnvPassword":true},"timestamp":1765683557335,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"database.ts:359","message":"Retry with default password successful","data":{},"timestamp":1765683557347,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"route.ts:22","message":"Connection test result","data":{"isConnected":true},"timestamp":1765683557348,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"route.ts:30","message":"Calling saveComprobante","data":{},"timestamp":1765683557349,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"database.ts:69","message":"saveComprobante called","data":{"host":"localhost","user":"root","hasPassword":true,"dbName":"textscan_comprob_db","port":3306},"timestamp":1765683557350,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"B"}
+{"location":"database.ts:79","message":"Connection created","data":{},"timestamp":1765683557354,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}
+{"location":"database.ts:82","message":"Executing sequence query","data":{},"timestamp":1765683557354,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}
+{"location":"database.ts:86","message":"Sequence query result","data":{"numeroSecuencia":"20251213001"},"timestamp":1765683557362,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}
+{"location":"route.ts:31","message":"saveComprobante succeeded","data":{"id":10,"numeroSecuencia":"20251213001"},"timestamp":1765683557369,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"page.tsx:273","message":"Fetch response received","data":{"status":200,"statusText":"OK","ok":true},"timestamp":1765683557372,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}
+{"location":"page.tsx:274","message":"Response JSON parsed","data":{"hasError":false,"hasSuccess":true},"timestamp":1765683557372,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}
+{"location":"page.tsx:256","message":"handleSaveToDatabase called","data":{"hasReportData":true},"timestamp":1765683743516,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}
+{"location":"page.tsx:261","message":"Sending fetch request","data":{"url":"/api/comprobantes","method":"POST"},"timestamp":1765683743517,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}
+{"location":"route.ts:8","message":"POST /api/comprobantes called","data":{},"timestamp":1765683743953,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"route.ts:11","message":"Request body parsed","data":{"hasTitulo":true,"hasEmisor":true,"hasReceptor":true,"hasTotales":true},"timestamp":1765683743955,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"route.ts:21","message":"Testing connection","data":{},"timestamp":1765683743955,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"database.ts:330","message":"testConnection called","data":{"dbHost":"localhost","dbUser":"root","hasPassword":true,"dbName":"textscan_comprob_db"},"timestamp":1765683743955,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"database.ts:338","message":"Pool connection obtained","data":{},"timestamp":1765683743956,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"database.ts:341","message":"Ping successful","data":{},"timestamp":1765683743957,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"A"}
+{"location":"route.ts:22","message":"Connection test result","data":{"isConnected":true},"timestamp":1765683743958,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"route.ts:30","message":"Calling saveComprobante","data":{},"timestamp":1765683743958,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"database.ts:69","message":"saveComprobante called","data":{"host":"localhost","user":"root","hasPassword":true,"dbName":"textscan_comprob_db","port":3306},"timestamp":1765683743958,"sessionId":"debug-session","runId":"post-fix","hypothesisId":"B"}
+{"location":"database.ts:79","message":"Connection created","data":{},"timestamp":1765683743967,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}
+{"location":"database.ts:82","message":"Executing sequence query","data":{},"timestamp":1765683743967,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}
+{"location":"database.ts:86","message":"Sequence query result","data":{"numeroSecuencia":"20251213002"},"timestamp":1765683743970,"sessionId":"debug-session","runId":"run1","hypothesisId":"B"}
+{"location":"route.ts:31","message":"saveComprobante succeeded","data":{"id":11,"numeroSecuencia":"20251213002"},"timestamp":1765683743975,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"page.tsx:273","message":"Fetch response received","data":{"status":200,"statusText":"OK","ok":true},"timestamp":1765683743978,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}
+{"location":"page.tsx:274","message":"Response JSON parsed","data":{"hasError":false,"hasSuccess":true},"timestamp":1765683743979,"sessionId":"debug-session","runId":"run1","hypothesisId":"D"}

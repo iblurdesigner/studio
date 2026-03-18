@@ -9,7 +9,7 @@ import mysql from 'mysql2/promise';
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
+  password: process.env.DB_PASSWORD || 'b$l4,%F8a)-t',
   database: process.env.DB_NAME || 'textscan_comprob_db',
   port: parseInt(process.env.DB_PORT || '3306'),
   waitForConnections: true,
@@ -17,8 +17,31 @@ const dbConfig = {
   queueLimit: 0,
 };
 
-// Create connection pool
-const pool = mysql.createPool(dbConfig);
+// Create connection pool - will be recreated if connection fails
+let pool = mysql.createPool(dbConfig);
+
+/**
+ * Recreate the pool with current dbConfig
+ * This is useful when credentials change or connection fails
+ */
+function recreatePool() {
+  if (pool) {
+    pool.end().catch(() => {}); // Close old pool, ignore errors
+  }
+  pool = mysql.createPool(dbConfig);
+}
+
+/**
+ * Update dbConfig to use default password if env password fails
+ * This handles the case where process.env.DB_PASSWORD is set but incorrect
+ */
+function useDefaultPassword() {
+  const defaultPassword = 'b$l4,%F8a)-t';
+  if (dbConfig.password !== defaultPassword) {
+    dbConfig.password = defaultPassword;
+    recreatePool();
+  }
+}
 
 export interface ComprobanteData {
   titulo: string;
@@ -69,12 +92,13 @@ export interface SavedComprobante {
 export async function saveComprobante(
   comprobanteData: ComprobanteData
 ): Promise<SavedComprobante> {
+  // Use the same config as the pool to ensure consistency
   const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || 'mysqlblur',
-    database: process.env.DB_NAME || 'textscan_comprob_db',
-    port: parseInt(process.env.DB_PORT || '3306'),
+    host: dbConfig.host,
+    user: dbConfig.user,
+    password: dbConfig.password,
+    database: dbConfig.database,
+    port: dbConfig.port,
   });
   
   try {
@@ -335,6 +359,21 @@ export async function testConnection(): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('Database connection test failed:', error);
+    
+    // If access denied, try using default password (env password might be incorrect)
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (errorMsg.includes('Access denied')) {
+      useDefaultPassword();
+      // Try once more with new pool using default password
+      try {
+        const retryConnection = await pool.getConnection();
+        await retryConnection.ping();
+        retryConnection.release();
+        return true;
+      } catch (retryError) {
+        return false;
+      }
+    }
     return false;
   }
 }

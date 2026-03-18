@@ -74,7 +74,7 @@ export function generateReportFromText(extractedText: string): ReportData {
     emisor: {
       nombre: 'OLGER RODRIGO FLORES FLORES',
       ruc: '1703684785001',
-      direccion: 'Real Audiencia',
+      direccion: 'San Juan',
       telefono: '0983502111',
     },
     receptor: {
@@ -152,15 +152,78 @@ function extractDocumentNumber(text: string): string | null {
 
 /**
  * Extract amounts from text
+ * PRIORITY: Banco Pichincha (>Transferencia exitosa!) > Monto: > Total: > otros genéricos
  */
-function extractAmounts(text: string): { valor?: number; descuento?: number; pago?: number } {
+export function extractAmounts(text: string): { valor?: number; descuento?: number; pago?: number } {
   const amounts: { valor?: number; descuento?: number; pago?: number } = {};
   
-  // Look for currency patterns ($, USD, etc.)
+  // PATTERN 0: Banco Pichincha specific pattern
+  // Looks for "Transferencia exitosa!" followed by $VALUE
+  // Format in OCR: "¡Transferencia exitosa!\n$ 350.00"
+  const pichinchaPattern = /transferencia\s+exitosa[!\.]*\s*\$?\s*(\d+(?:[.,]\d{2})?)/i;
+  const pichinchaMatch = text.match(pichinchaPattern);
+  
+  console.log('[extractAmounts] OCR Text snippet:', text.substring(0, 300));
+  console.log('[extractAmounts] Pichincha pattern match:', pichinchaMatch);
+  
+  if (pichinchaMatch) {
+    const monto = parseLocaleNumber(pichinchaMatch[1]);
+    console.log('[extractAmounts] Extracted Pichincha monto:', monto);
+    if (monto > 0) {
+      amounts.valor = monto;
+      amounts.pago = monto;
+      console.log('[extractAmounts] SUCCESS - using Pichincha pattern');
+      return amounts;
+    }
+  }
+  
+  // PATTERN 1: "Monto:" pattern
+  const montoPatterns = [
+    /\bmonto\s*:\s*\$?\s*(\d+(?:[.,]\d{2})?)/i,       // monto: $350.00
+    /\bmonto\s*:\s*(\d+(?:[.,]\d{2})?)/i,              // monto: 350.00
+    /monto[a-z]*\s*:\s*\$?\s*(\d+(?:[.,]\d{2})?)/i,   // allows minor OCR char variations
+  ];
+  
+  let montoMatch = null;
+  for (const pattern of montoPatterns) {
+    montoMatch = text.match(pattern);
+    if (montoMatch) break;
+  }
+  
+  console.log('[extractAmounts] Monto pattern match:', montoMatch);
+  
+  if (montoMatch) {
+    const monto = parseLocaleNumber(montoMatch[1]);
+    console.log('[extractAmounts] Extracted monto:', monto);
+    if (monto > 0) {
+      amounts.valor = monto;
+      amounts.pago = monto;
+      console.log('[extractAmounts] SUCCESS - using Monto pattern');
+      return amounts;
+    }
+  }
+  
+  console.log('[extractAmounts] No monto found, trying Total pattern...');
+  
+  // PATTERN 2: "Total:" pattern
+  const totalPattern = /(?:total|valor)\s*:?\s*\$?\s*(\d+(?:[.,]\d{2})?)/i;
+  const totalMatch = text.match(totalPattern);
+  if (totalMatch) {
+    const total = parseLocaleNumber(totalMatch[1]);
+    if (total > 0) {
+      amounts.valor = total;
+      amounts.pago = total;
+      return amounts;
+    }
+  }
+  
+  // PATTERN 3: Generic currency patterns with space support (fallback)
+  console.log('[extractAmounts] No Total found, using generic $-pattern (with space support)');
+  
+  // Look for currency patterns ($, USD, etc.) - now with space support
   const currencyPatterns = [
-    /\$(\d+(?:\.\d{2})?)/g,
-    /(\d+(?:\.\d{2})?)\s*(?:usd|dolares?|dollars?)/gi,
-    /(?:valor|monto|total|pago)\s*:?\s*\$?(\d+(?:\.\d{2})?)/gi,
+    /\$\s?(\d+(?:[.,]\d{2})?)/g,  // $350.00 or $ 350.00 (with optional space)
+    /(\d+(?:[.,]\d{2})?)\s*(?:usd|dolares?|dollars?)/gi,
   ];
   
   const foundAmounts: number[] = [];
@@ -168,17 +231,21 @@ function extractAmounts(text: string): { valor?: number; descuento?: number; pag
   for (const pattern of currencyPatterns) {
     let match;
     while ((match = pattern.exec(text)) !== null) {
-      const amount = parseFloat(match[1]);
+      const amount = parseLocaleNumber(match[1]);
       if (amount > 0) {
         foundAmounts.push(amount);
       }
     }
   }
   
-  // Sort amounts and assign them
-  foundAmounts.sort((a, b) => b - a); // Descending order
+  console.log('[extractAmounts] All $-amounts found:', foundAmounts);
+  
+  // Sort amounts and assign them - descending order
+  foundAmounts.sort((a, b) => b - a);
+  console.log('[extractAmounts] After sorting (desc):', foundAmounts);
   
   if (foundAmounts.length > 0) {
+    console.log('[extractAmounts] WARNING: Using largest amount (fallback):', foundAmounts[0]);
     amounts.valor = foundAmounts[0];
     amounts.pago = foundAmounts[0];
   }
@@ -188,6 +255,44 @@ function extractAmounts(text: string): { valor?: number; descuento?: number; pag
   }
   
   return amounts;
+}
+
+/**
+ * Parse number with locale support (handles both 1,234.56 and 1.234,56 formats)
+ */
+function parseLocaleNumber(str: string): number {
+  // Remove spaces and common separators
+  let cleaned = str.trim();
+  
+  // Handle both formats: "1,234.56" and "1.234,56"
+  // Count commas and dots to determine the format
+  const commaCount = (cleaned.match(/,/g) || []).length;
+  const dotCount = (cleaned.match(/\./g) || []).length;
+  
+  if (commaCount === 1 && dotCount === 0) {
+    // Format: 1,234 (Spanish thousands separator) or 1,23 (European decimal)
+    if (/,\d{2}$/.test(cleaned)) {
+      // European decimal: 1234,56 → 1234.56
+      cleaned = cleaned.replace(',', '.');
+    } else {
+      // Spanish thousands: 1,234 → 1234
+      cleaned = cleaned.replace(',', '');
+    }
+  } else if (dotCount === 1 && commaCount === 0) {
+    // Format: 1234.56 (US style) - already correct
+  } else if (dotCount === 1 && commaCount === 1) {
+    // Both present - determine which is decimal
+    const lastSeparator = Math.max(cleaned.lastIndexOf('.'), cleaned.lastIndexOf(','));
+    if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
+      // European: 1.234,56
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    } else {
+      // US: 1,234.56
+      cleaned = cleaned.replace(/,/g, '');
+    }
+  }
+  
+  return parseFloat(cleaned) || 0;
 }
 
 /**

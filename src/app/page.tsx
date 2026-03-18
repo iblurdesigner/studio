@@ -307,7 +307,17 @@ export default function Home() {
       const newData = JSON.parse(JSON.stringify(prevData));
       
       if (section === 'items' && index !== undefined) {
-        newData[section][index][field] = value;
+        const numValue = parseFloat(value) || 0;
+        newData[section][index][field] = numValue;
+        
+        // Auto-calculate SUBTOTAL and TOTAL when valor or pago changes
+        if (field === 'valor') {
+          // SUBTOTAL = sum of all valores
+          newData.totales.subtotal = newData.items.reduce((sum: number, item: any) => sum + (parseFloat(item.valor) || 0), 0);
+        } else if (field === 'pago') {
+          // TOTAL = sum of all pagos
+          newData.totales.total = newData.items.reduce((sum: number, item: any) => sum + (parseFloat(item.pago) || 0), 0);
+        }
       } else if (section === 'totales' || section === 'emisor' || section === 'receptor' || section === 'pie') {
         newData[section][field] = value;
       } else {
@@ -460,7 +470,7 @@ export default function Home() {
                 Empezar de Nuevo
               </Button>
             </div>
-            <Card className="w-full p-6">
+            <Card className="w-full p-6" style={{ width: '933px' }}>
               <div id="printable-report" className="space-y-6">
                 {/* Header */}
                 <div className="text-center space-y-1">
@@ -492,7 +502,7 @@ export default function Home() {
                      <div className="grid grid-cols-[100px_1fr] items-center gap-2">
                       <Label>Recibí de:</Label> <Input value={reportData.receptor.nombre} onChange={(e) => handleReportDataChange('receptor', 'nombre', e.target.value)} />
                       <Label>Teléfono:</Label> <Input value={reportData.receptor.telefono} onChange={(e) => handleReportDataChange('receptor', 'telefono', e.target.value)} />
-                      <Label>Dirección:</Label> <Input value={reportData.receptor.direccion} onChange={(e) => handleReportDataChange('receptor', 'direccion', e.target.value)} />
+                      <Label>Dirección:</Label> <Input value={reportData.receptor.direccion} onChange={(e) => handleReportDataChange('receptor', 'direccion', e.target.value)} style={{ width: '321px' }} />
                       <Label>Identif.:</Label> <Input value={reportData.receptor.identificacion} onChange={(e) => handleReportDataChange('receptor', 'identificacion', e.target.value)} />
                       <Label>Fecha Cobro:</Label> <Input type="date" value={reportData.receptor.fechaCobro} onChange={(e) => handleReportDataChange('receptor', 'fechaCobro', e.target.value)} />
                     </div>
@@ -506,18 +516,18 @@ export default function Home() {
                       <tr>
                         <th className="p-2">Unidad</th>
                         <th className="p-2">Detalle</th>
-                        <th className="p-2 text-right">Valor</th>
+                        <th className="p-2 text-center">Valor</th>
                         <th className="p-2 text-right">Descuento</th>
-                        <th className="p-2 text-right">Pago</th>
+                        <th className="p-2 text-center">Pago</th>
                       </tr>
                     </thead>
                     <tbody>
                       {reportData.items.map((item, index) => (
                         <tr key={index} className="border-b">
                           <td className="p-2"><Input value={item.unidad} onChange={(e) => handleReportDataChange('items', 'unidad', e.target.value, index)} className="border-none"/></td>
-                          <td className="p-2"><Input value={item.detalle} onChange={(e) => handleReportDataChange('items', 'detalle', e.target.value, index)} className="border-none"/></td>
-                          <td className="p-2"><Input value={item.valor} onChange={(e) => handleReportDataChange('items', 'valor', e.target.value, index)} className="text-right border-none"/></td>
-                          <td className="p-2"><Input value={item.descuento} onChange={(e) => handleReportDataChange('items', 'descuento', e.target.value, index)} className="text-right border-none"/></td>
+                          <td className="p-2"><Input value={item.detalle} onChange={(e) => handleReportDataChange('items', 'detalle', e.target.value, index)} className="border-none" style={{ width: '331px' }}/></td>
+                          <td className="p-2"><Input value={item.valor} onChange={(e) => handleReportDataChange('items', 'valor', e.target.value, index)} className="text-center border-none"/></td>
+                          <td className="p-2"><Input value={item.descuento} onChange={(e) => handleReportDataChange('items', 'descuento', e.target.value, index)} className="text-center border-none"/></td>
                           <td className="p-2"><Input value={item.pago} onChange={(e) => handleReportDataChange('items', 'pago', e.target.value, index)} className="text-right border-none"/></td>
                         </tr>
                       ))}
