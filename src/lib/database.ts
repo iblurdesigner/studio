@@ -278,11 +278,11 @@ export async function getComprobantes(
     const total = countResult[0].total;
 
     // Get comprobantes with pagination
-    const [rows] = await connection.execute(
+    // Note: Using query() with interpolated values for LIMIT/OFFSET to avoid mysql2 bug
+    const [rows] = await connection.query(
       `SELECT * FROM comprobantes 
        ORDER BY fecha_creacion DESC 
-       LIMIT ? OFFSET ?`,
-      [limit, offset]
+       LIMIT ${Number(limit)} OFFSET ${Number(offset)}`
     ) as any[];
 
     const comprobantes: SavedComprobante[] = [];

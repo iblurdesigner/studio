@@ -3,6 +3,27 @@ import { saveComprobante, getComprobantes, testConnection } from '@/lib/database
 import { ReportData } from '@/lib/text-processor';
 
 /**
+ * GET /api/comprobantes/diag - Diagnostic endpoint
+ */
+export async function PING() {
+  try {
+    const isConnected = await testConnection();
+    return NextResponse.json({
+      success: true,
+      connected: isConnected,
+      message: isConnected ? 'Conexión exitosa' : 'No se pudo conectar'
+    });
+  } catch (error) {
+    console.error('Error en diagnóstico:', error);
+    return NextResponse.json({
+      success: false,
+      connected: false,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
+/**
  * POST /api/comprobantes - Save a new comprobante
  */
 export async function POST(request: NextRequest) {
@@ -18,16 +39,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Test database connection first
+    console.log('[API POST] Probando conexión a BD...');
     const isConnected = await testConnection();
+    console.log('[API POST] Resultado conexión:', isConnected);
+    
     if (!isConnected) {
       return NextResponse.json(
-        { error: 'Error de conexión a la base de datos' },
+        { error: 'Error de conexión a la base de datos. Verifica que MySQL esté corriendo.' },
         { status: 500 }
       );
     }
 
     // Save the comprobante
+    console.log('[API POST] Guardando comprobante...');
     const savedComprobante = await saveComprobante(body);
+    console.log('[API POST] Comprobante guardado:', savedComprobante.id);
 
     return NextResponse.json({
       success: true,
@@ -40,7 +66,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Error interno del servidor',
-        details: error instanceof Error ? error.message : 'Error desconocido'
+        details: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );
@@ -56,17 +82,25 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
 
+    console.log('[API GET] page:', page, 'limit:', limit);
+    console.log('[API GET] Probando conexión a BD...');
+    
     // Test database connection first
     const isConnected = await testConnection();
+    console.log('[API GET] Resultado conexión:', isConnected);
+    
     if (!isConnected) {
+      console.log('[API GET] No se pudo conectar a la BD');
       return NextResponse.json(
-        { error: 'Error de conexión a la base de datos' },
+        { error: 'Error de conexión a la base de datos. Verifica que MySQL esté corriendo.' },
         { status: 500 }
       );
     }
 
     // Get comprobantes
+    console.log('[API GET] Obteniendo comprobantes...');
     const result = await getComprobantes(page, limit);
+    console.log('[API GET] Encontrados:', result.comprobantes.length, 'de', result.total);
 
     return NextResponse.json({
       success: true,
@@ -84,7 +118,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Error interno del servidor',
-        details: error instanceof Error ? error.message : 'Error desconocido'
+        details: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );
