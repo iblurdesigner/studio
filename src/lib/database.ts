@@ -1,47 +1,12 @@
 /**
  * @fileOverview Database connection and operations for TextScan Arriendo
- * This file handles all database operations for saving and retrieving comprobantes
+ * Adapted for PostgreSQL (Neon.tech)
  */
 
-import mysql from 'mysql2/promise';
+import { neon } from '@neondatabase/serverless';
 
-// Database configuration
-const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'b$l4,%F8a)-t',
-  database: process.env.DB_NAME || 'textscan_comprob_db',
-  port: parseInt(process.env.DB_PORT || '3306'),
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-};
-
-// Create connection pool - will be recreated if connection fails
-let pool = mysql.createPool(dbConfig);
-
-/**
- * Recreate the pool with current dbConfig
- * This is useful when credentials change or connection fails
- */
-function recreatePool() {
-  if (pool) {
-    pool.end().catch(() => {}); // Close old pool, ignore errors
-  }
-  pool = mysql.createPool(dbConfig);
-}
-
-/**
- * Update dbConfig to use default password if env password fails
- * This handles the case where process.env.DB_PASSWORD is set but incorrect
- */
-function useDefaultPassword() {
-  const defaultPassword = 'b$l4,%F8a)-t';
-  if (dbConfig.password !== defaultPassword) {
-    dbConfig.password = defaultPassword;
-    recreatePool();
-  }
-}
+// Create database connection using Neon
+const sql = neon(process.env.DATABASE_URL || '');
 
 export interface ComprobanteData {
   titulo: string;
@@ -87,100 +52,73 @@ export interface SavedComprobante {
 }
 
 /**
- * Save a comprobante to the database using the stored procedure
+ * Save a comprobante to the database
  */
 export async function saveComprobante(
   comprobanteData: ComprobanteData
 ): Promise<SavedComprobante> {
-  // Use the same config as the pool to ensure consistency
-  const connection = await mysql.createConnection({
-    host: dbConfig.host,
-    user: dbConfig.user,
-    password: dbConfig.password,
-    database: dbConfig.database,
-    port: dbConfig.port,
-  });
-  
   try {
-    // Generate sequence number
-    const [sequenceResult] = await connection.execute(
-      'SELECT get_next_sequence_number() as numero_secuencia'
-    ) as any[];
-    
-    const numeroSecuencia = sequenceResult[0].numero_secuencia;
+    // Generate sequence number (date + random)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const datePrefix = `${year}${month}${day}`;
+    const randomNum = String(Math.floor(Math.random() * 999) + 1).padStart(3, '0');
+    const numeroSecuencia = `${datePrefix}${randomNum}`;
 
-    // Insert comprobante directly
-    const [result] = await connection.execute(
-      `INSERT INTO comprobantes (
-        numero_secuencia, titulo, emisor_nombre, emisor_ruc, emisor_direccion, emisor_telefono,
+    // Insert comprobante
+    const result = await sql`
+      INSERT INTO comprobantes (
+        numero_secuencia, titulo, 
+        emisor_nombre, emisor_ruc, emisor_direccion, emisor_telefono,
         receptor_nombre, receptor_telefono, receptor_direccion, receptor_identificacion, receptor_fecha_cobro,
         forma_pago, documento_comprobante, informacion_relacionada,
         subtotal, descuentos, total, texto_ocr_original, imagen_path
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        numeroSecuencia,
-        comprobanteData.titulo,
-        comprobanteData.emisor.nombre,
-        comprobanteData.emisor.ruc,
-        comprobanteData.emisor.direccion,
-        comprobanteData.emisor.telefono,
-        comprobanteData.receptor.nombre,
-        comprobanteData.receptor.telefono,
-        comprobanteData.receptor.direccion,
-        comprobanteData.receptor.identificacion,
-        comprobanteData.receptor.fechaCobro,
-        comprobanteData.pie.formaPago,
-        comprobanteData.pie.documentoComprobante,
-        comprobanteData.pie.informacionRelacionada,
-        comprobanteData.totales.subtotal,
-        comprobanteData.totales.descuentos,
-        comprobanteData.totales.total,
-        comprobanteData.textoOcrOriginal || '',
-        comprobanteData.imagenPath || ''
-      ]
-    ) as any[];
+      ) VALUES (
+        ${numeroSecuencia}, ${comprobanteData.titulo},
+        ${comprobanteData.emisor.nombre}, ${comprobanteData.emisor.ruc}, 
+        ${comprobanteData.emisor.direccion}, ${comprobanteData.emisor.telefono},
+        ${comprobanteData.receptor.nombre}, ${comprobanteData.receptor.telefono},
+        ${comprobanteData.receptor.direccion}, ${comprobanteData.receptor.identificacion},
+        ${comprobanteData.receptor.fechaCobro},
+        ${comprobanteData.pie.formaPago}, ${comprobanteData.pie.documentoComprobante},
+        ${comprobanteData.pie.informacionRelacionada},
+        ${comprobanteData.totales.subtotal}, ${comprobanteData.totales.descuentos},
+        ${comprobanteData.totales.total}, ${comprobanteData.textoOcrOriginal || ''},
+        ${comprobanteData.imagenPath || ''}
+      )
+      RETURNING id, fecha_creacion
+    `;
 
-    const comprobanteId = result.insertId;
+    const insertResult = result[0];
+    const comprobanteId = insertResult.id;
 
-    // Save the items
+    // Save items
     if (comprobanteData.items && comprobanteData.items.length > 0) {
       for (let i = 0; i < comprobanteData.items.length; i++) {
         const item = comprobanteData.items[i];
-        await connection.execute(
-          `INSERT INTO comprobante_items 
-           (comprobante_id, unidad, detalle, valor, descuento, pago, orden) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [
-            comprobanteId,
-            item.unidad,
-            item.detalle,
-            item.valor,
-            item.descuento,
-            item.pago,
-            i + 1
-          ]
-        );
+        await sql`
+          INSERT INTO comprobante_items 
+          (comprobante_id, unidad, detalle, valor, descuento, pago, orden) 
+          VALUES (
+            ${comprobanteId}, ${item.unidad}, ${item.detalle},
+            ${item.valor}, ${item.descuento}, ${item.pago}, ${i + 1}
+          )
+        `;
       }
     }
-
-    // Get the created comprobante with its creation date
-    const [comprobanteResult] = await connection.execute(
-      'SELECT fecha_creacion FROM comprobantes WHERE id = ?',
-      [comprobanteId]
-    ) as any[];
 
     return {
       id: comprobanteId,
       numeroSecuencia,
       comprobanteData,
-      fechaCreacion: new Date(comprobanteResult[0].fecha_creacion)
+      fechaCreacion: new Date(insertResult.fecha_creacion)
     };
 
   } catch (error) {
     console.error('Error saving comprobante:', error);
     throw new Error(`Error al guardar el comprobante: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-  } finally {
-    await connection.end();
   }
 }
 
@@ -188,25 +126,17 @@ export async function saveComprobante(
  * Get a comprobante by ID
  */
 export async function getComprobante(id: number): Promise<SavedComprobante | null> {
-  const connection = await pool.getConnection();
-  
   try {
-    const [rows] = await connection.execute(
-      'SELECT * FROM comprobantes WHERE id = ?',
-      [id]
-    ) as any[];
-
+    const rows = await sql`SELECT * FROM comprobantes WHERE id = ${id}`;
+    
     if (rows.length === 0) {
       return null;
     }
 
     const comprobante = rows[0];
 
-    // Get the items
-    const [itemRows] = await connection.execute(
-      'SELECT * FROM comprobante_items WHERE comprobante_id = ? ORDER BY orden',
-      [id]
-    ) as any[];
+    // Get items
+    const itemRows = await sql`SELECT * FROM comprobante_items WHERE comprobante_id = ${id} ORDER BY orden`;
 
     const comprobanteData: ComprobanteData = {
       titulo: comprobante.titulo,
@@ -254,8 +184,6 @@ export async function getComprobante(id: number): Promise<SavedComprobante | nul
   } catch (error) {
     console.error('Error getting comprobante:', error);
     throw new Error(`Error al obtener el comprobante: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-  } finally {
-    connection.release();
   }
 }
 
@@ -266,33 +194,25 @@ export async function getComprobantes(
   page: number = 1, 
   limit: number = 10
 ): Promise<{ comprobantes: SavedComprobante[], total: number }> {
-  const connection = await pool.getConnection();
-  
   try {
     const offset = (page - 1) * limit;
 
     // Get total count
-    const [countResult] = await connection.execute(
-      'SELECT COUNT(*) as total FROM comprobantes'
-    ) as any[];
-    const total = countResult[0].total;
+    const countResult = await sql`SELECT COUNT(*) as total FROM comprobantes`;
+    const total = Number(countResult[0].total);
 
     // Get comprobantes with pagination
-    // Note: Using query() with interpolated values for LIMIT/OFFSET to avoid mysql2 bug
-    const [rows] = await connection.query(
-      `SELECT * FROM comprobantes 
-       ORDER BY fecha_creacion DESC 
-       LIMIT ${Number(limit)} OFFSET ${Number(offset)}`
-    ) as any[];
+    const rows = await sql`
+      SELECT * FROM comprobantes 
+      ORDER BY fecha_creacion DESC 
+      LIMIT ${Number(limit)} OFFSET ${Number(offset)}
+    `;
 
     const comprobantes: SavedComprobante[] = [];
 
     for (const comprobante of rows) {
       // Get items for each comprobante
-      const [itemRows] = await connection.execute(
-        'SELECT * FROM comprobante_items WHERE comprobante_id = ? ORDER BY orden',
-        [comprobante.id]
-      ) as any[];
+      const itemRows = await sql`SELECT * FROM comprobante_items WHERE comprobante_id = ${comprobante.id} ORDER BY orden`;
 
       const comprobanteData: ComprobanteData = {
         titulo: comprobante.titulo,
@@ -343,8 +263,6 @@ export async function getComprobantes(
   } catch (error) {
     console.error('Error getting comprobantes:', error);
     throw new Error(`Error al obtener los comprobantes: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-  } finally {
-    connection.release();
   }
 }
 
@@ -353,34 +271,17 @@ export async function getComprobantes(
  */
 export async function testConnection(): Promise<boolean> {
   try {
-    const connection = await pool.getConnection();
-    await connection.ping();
-    connection.release();
-    return true;
+    const result = await sql`SELECT 1 as test`;
+    return result.length > 0;
   } catch (error) {
     console.error('Database connection test failed:', error);
-    
-    // If access denied, try using default password (env password might be incorrect)
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    if (errorMsg.includes('Access denied')) {
-      useDefaultPassword();
-      // Try once more with new pool using default password
-      try {
-        const retryConnection = await pool.getConnection();
-        await retryConnection.ping();
-        retryConnection.release();
-        return true;
-      } catch (retryError) {
-        return false;
-      }
-    }
     return false;
   }
 }
 
 /**
- * Close the database connection pool
+ * Close the database connection
  */
 export async function closeConnection(): Promise<void> {
-  await pool.end();
+  // Neon handles connection pooling automatically, no need to close
 }
